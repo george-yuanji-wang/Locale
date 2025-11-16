@@ -1,0 +1,12 @@
+venv/
+.DS_Store
+
+models/**/*.pt
+models/**/*.pth
+models/**/*.onnx
+models/**/*.task
+models/**/*.tflite
+
+!models/.gitkeep
+!models/**/download.sh
+!models/**/README.md

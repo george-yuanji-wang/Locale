@@ -1,0 +1,95 @@
+thread_pools:
+  - id: camera_pool
+    description: "Camera capture"
+    fps: 60
+  
+  - id: yolo_pool
+    description: "YOLO detection"
+    fps: 20
+  
+  - id: viz_pool
+    description: "Visualization"
+    fps: 60
+
+nodes:
+  # Camera source
+  - id: camera
+    type: CameraNode
+    pool: camera_pool
+    params:
+      camera_id: 0
+  
+  # YOLO detection (runs at 20 FPS)
+  - id: yolo_detector
+    type: YOLONode
+    pool: yolo_pool
+    params:
+      model_name: yolov8s
+      device: auto
+      num_inputs: 1
+      confidence: 0.3
+      iou: 0.2
+  
+  # Visualizer: Draw bounding boxes on image
+  - id: visualizer
+    type: ImageNode
+    pool: viz_pool
+    input_schema:
+      - name: image
+        type: image
+      - name: detections
+        type: data
+    operations:
+      - type: custom
+        params:
+          code: |
+            # Get base image and detections
+            output = img.copy()
+            detections_data = inputs.get('detections', {})
+            
+            # Get detections for first output (single camera)
+            dets = detections_data.get('output0', {}).get('detections', [])
+            
+            # Draw each detection
+            for det in dets:
+                bbox = det['bbox']
+                x1, y1 = int(bbox['x1']), int(bbox['y1'])
+                x2, y2 = int(bbox['x2']), int(bbox['y2'])
+                
+                # Draw bounding box
+                cv2.rectangle(output, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                
+                # Draw label with confidence
+                label = f"{det['class_name']}: {det['confidence']:.2f}"
+                
+                # Background for text
+                (text_w, text_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
+                cv2.rectangle(output, (x1, y1 - text_h - 10), (x1 + text_w, y1), (0, 255, 0), -1)
+                
+                # Draw text
+                cv2.putText(output, label, (x1, y1 - 5),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
+            
+            # Add FPS info
+            det_count = detections_data.get('output0', {}).get('count', 0)
+            info_text = f"Detections: {det_count} | YOLO: 20 FPS | Display: 60 FPS"
+            cv2.putText(output, info_text, (10, 30),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            
+            return output
+
+connections:
+  # Camera to YOLO
+  - source: camera
+    target: yolo_detector
+    target_input: input0
+  
+  # Camera to visualizer (for base image)
+  - source: camera
+    target: visualizer
+    target_input: image
+  
+  # YOLO detections to visualizer
+  - source: yolo_detector
+    target: visualizer
+    target_input: detections
