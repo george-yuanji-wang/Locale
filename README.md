@@ -1,5 +1,5 @@
-# Locale AI Agent
+# Locale: Real-Time Modular Vision Framework
 
-Make spatially aware and proactive AI agents.
+Goal, make spatially aware and proactive AI agents.
 
 In-progress
